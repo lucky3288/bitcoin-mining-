@@ -100,6 +100,9 @@ const Wallets = () => {
           <DialogContent data-testid="create-wallet-dialog">
             <DialogHeader>
               <DialogTitle data-testid="dialog-title">Créer un nouveau wallet</DialogTitle>
+              <DialogDescription>
+                Entrez un nom d'utilisateur pour créer votre wallet. Vous recevrez 1000 tokens de départ.
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={createWallet} className="form-grid">
               <div className="form-group">
