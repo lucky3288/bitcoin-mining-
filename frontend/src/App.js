@@ -1,39 +1,62 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import axios from "axios";
+import Dashboard from "@/pages/Dashboard";
+import Wallets from "@/pages/Wallets";
+import Transactions from "@/pages/Transactions";
+import WalletDetail from "@/pages/WalletDetail";
+import { Toaster } from "@/components/ui/sonner";
+import { Wallet, ArrowLeftRight, LayoutDashboard } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+export const API = `${BACKEND_URL}/api`;
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
+const Navigation = () => {
+  const location = useLocation();
+  
+  const isActive = (path) => {
+    return location.pathname === path;
   };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
+  
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
+    <nav className="nav-container">
+      <div className="nav-content">
+        <div className="nav-brand">
+          <div className="brand-icon" data-testid="brand-icon">
+            <Wallet size={28} />
+          </div>
+          <h1 className="brand-title" data-testid="brand-title">CryptoToken</h1>
+        </div>
+        
+        <div className="nav-links">
+          <Link 
+            to="/" 
+            className={`nav-link ${isActive('/') ? 'active' : ''}`}
+            data-testid="nav-dashboard-link"
+          >
+            <LayoutDashboard size={20} />
+            <span>Dashboard</span>
+          </Link>
+          <Link 
+            to="/wallets" 
+            className={`nav-link ${isActive('/wallets') ? 'active' : ''}`}
+            data-testid="nav-wallets-link"
+          >
+            <Wallet size={20} />
+            <span>Wallets</span>
+          </Link>
+          <Link 
+            to="/transactions" 
+            className={`nav-link ${isActive('/transactions') ? 'active' : ''}`}
+            data-testid="nav-transactions-link"
+          >
+            <ArrowLeftRight size={20} />
+            <span>Transactions</span>
+          </Link>
+        </div>
+      </div>
+    </nav>
   );
 };
 
@@ -41,12 +64,17 @@ function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
+        <Navigation />
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/wallets" element={<Wallets />} />
+            <Route path="/wallets/:address" element={<WalletDetail />} />
+            <Route path="/transactions" element={<Transactions />} />
+          </Routes>
+        </main>
       </BrowserRouter>
+      <Toaster position="top-right" />
     </div>
   );
 }
