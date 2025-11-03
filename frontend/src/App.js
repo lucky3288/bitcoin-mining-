@@ -1,22 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
-import axios from "axios";
-import Dashboard from "@/pages/Dashboard";
-import Wallets from "@/pages/Wallets";
-import Transactions from "@/pages/Transactions";
-import WalletDetail from "@/pages/WalletDetail";
+import Deploy from "@/pages/Deploy";
+import TokenManagement from "@/pages/TokenManagement";
+import Dashboard from "@/pages/TokenDashboard";
 import { Toaster } from "@/components/ui/sonner";
-import { Wallet, ArrowLeftRight, LayoutDashboard } from "lucide-react";
+import { Coins, Upload, LayoutDashboard } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useMetaMask } from "@/hooks/useMetaMask";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
 const Navigation = () => {
   const location = useLocation();
+  const { account, connectWallet, disconnectWallet } = useMetaMask();
   
   const isActive = (path) => {
     return location.pathname === path;
+  };
+  
+  const formatAddress = (addr) => {
+    return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
   
   return (
@@ -24,9 +29,9 @@ const Navigation = () => {
       <div className="nav-content">
         <div className="nav-brand">
           <div className="brand-icon" data-testid="brand-icon">
-            <Wallet size={28} />
+            <Coins size={28} />
           </div>
-          <h1 className="brand-title" data-testid="brand-title">CryptoToken</h1>
+          <h1 className="brand-title" data-testid="brand-title">Zyno Token</h1>
         </div>
         
         <div className="nav-links">
@@ -39,21 +44,47 @@ const Navigation = () => {
             <span>Dashboard</span>
           </Link>
           <Link 
-            to="/wallets" 
-            className={`nav-link ${isActive('/wallets') ? 'active' : ''}`}
-            data-testid="nav-wallets-link"
+            to="/deploy" 
+            className={`nav-link ${isActive('/deploy') ? 'active' : ''}`}
+            data-testid="nav-deploy-link"
           >
-            <Wallet size={20} />
-            <span>Wallets</span>
+            <Upload size={20} />
+            <span>Deploy</span>
           </Link>
           <Link 
-            to="/transactions" 
-            className={`nav-link ${isActive('/transactions') ? 'active' : ''}`}
-            data-testid="nav-transactions-link"
+            to="/manage" 
+            className={`nav-link ${isActive('/manage') ? 'active' : ''}`}
+            data-testid="nav-manage-link"
           >
-            <ArrowLeftRight size={20} />
-            <span>Transactions</span>
+            <Coins size={20} />
+            <span>Manage</span>
           </Link>
+        </div>
+
+        <div>
+          {account ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div className="wallet-badge" data-testid="wallet-address">
+                {formatAddress(account)}
+              </div>
+              <Button 
+                onClick={disconnectWallet}
+                data-testid="disconnect-button"
+                variant="outline"
+                size="sm"
+              >
+                Disconnect
+              </Button>
+            </div>
+          ) : (
+            <Button 
+              onClick={connectWallet}
+              data-testid="connect-wallet-button"
+              className="connect-button"
+            >
+              Connect MetaMask
+            </Button>
+          )}
         </div>
       </div>
     </nav>
@@ -68,9 +99,8 @@ function App() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/wallets" element={<Wallets />} />
-            <Route path="/wallets/:address" element={<WalletDetail />} />
-            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/deploy" element={<Deploy />} />
+            <Route path="/manage" element={<TokenManagement />} />
           </Routes>
         </main>
       </BrowserRouter>

@@ -9,8 +9,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
-import hashlib
-import random
+from blockchain_contract import CONTRACT_ABI
 
 
 ROOT_DIR = Path(__file__).parent
@@ -29,174 +28,136 @@ api_router = APIRouter(prefix="/api")
 
 
 # Define Models
-class Wallet(BaseModel):
+class TokenDeployment(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_name: str
-    address: str
-    balance: float = 1000.0
+    contract_address: str
+    token_name: str
+    token_symbol: str
+    initial_supply: str
+    max_supply: str
+    deployer_address: str
+    network: str = "localhost"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class WalletCreate(BaseModel):
-    user_name: str
+class TokenDeploymentCreate(BaseModel):
+    contract_address: str
+    token_name: str
+    token_symbol: str
+    initial_supply: str
+    max_supply: str
+    deployer_address: str
 
-class Transaction(BaseModel):
+class TokenTransaction(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    tx_hash: str
     from_address: str
-    to_address: str
-    amount: float
+    to_address: Optional[str] = None
+    amount: str
+    tx_type: str  # mint, transfer, burn
+    contract_address: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: str = "completed"
 
-class TransactionCreate(BaseModel):
+class TokenTransactionCreate(BaseModel):
+    tx_hash: str
     from_address: str
-    to_address: str
-    amount: float
-
-class DashboardStats(BaseModel):
-    total_tokens: float
-    total_wallets: int
-    total_transactions: int
-    recent_transactions: List[Transaction]
+    to_address: Optional[str] = None
+    amount: str
+    tx_type: str
+    contract_address: str
 
 
-# Helper function to generate unique wallet address
-def generate_wallet_address(user_name: str) -> str:
-    random_suffix = str(random.randint(100000, 999999))
-    data = f"{user_name}{datetime.now(timezone.utc).isoformat()}{random_suffix}"
-    hash_object = hashlib.sha256(data.encode())
-    return f"0x{hash_object.hexdigest()[:40]}"
+# Contract ABI endpoint
+@api_router.get("/contract/abi")
+async def get_contract_abi():
+    return {"abi": CONTRACT_ABI}
 
 
-# Wallet Routes
-@api_router.post("/wallets", response_model=Wallet)
-async def create_wallet(input: WalletCreate):
-    # Generate unique address
-    address = generate_wallet_address(input.user_name)
+# Token Deployment Routes
+@api_router.post("/deployments", response_model=TokenDeployment)
+async def save_deployment(input: TokenDeploymentCreate):
+    deployment_obj = TokenDeployment(
+        contract_address=input.contract_address,
+        token_name=input.token_name,
+        token_symbol=input.token_symbol,
+        initial_supply=input.initial_supply,
+        max_supply=input.max_supply,
+        deployer_address=input.deployer_address
+    )
     
-    # Check if address already exists (very unlikely but safe)
-    existing = await db.wallets.find_one({"address": address})
-    if existing:
-        address = generate_wallet_address(input.user_name + str(uuid.uuid4()))
-    
-    wallet_obj = Wallet(user_name=input.user_name, address=address)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = wallet_obj.model_dump()
+    doc = deployment_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     
-    await db.wallets.insert_one(doc)
-    return wallet_obj
+    await db.deployments.insert_one(doc)
+    return deployment_obj
 
-@api_router.get("/wallets", response_model=List[Wallet])
-async def get_wallets():
-    wallets = await db.wallets.find({}, {"_id": 0}).to_list(1000)
+@api_router.get("/deployments", response_model=List[TokenDeployment])
+async def get_deployments():
+    deployments = await db.deployments.find({}, {"_id": 0}).to_list(100)
     
-    # Convert ISO string timestamps back to datetime objects
-    for wallet in wallets:
-        if isinstance(wallet['created_at'], str):
-            wallet['created_at'] = datetime.fromisoformat(wallet['created_at'])
+    for deployment in deployments:
+        if isinstance(deployment['created_at'], str):
+            deployment['created_at'] = datetime.fromisoformat(deployment['created_at'])
     
-    return wallets
+    return deployments
 
-@api_router.get("/wallets/{address}", response_model=Wallet)
-async def get_wallet(address: str):
-    wallet = await db.wallets.find_one({"address": address}, {"_id": 0})
+@api_router.get("/deployments/{contract_address}", response_model=TokenDeployment)
+async def get_deployment(contract_address: str):
+    deployment = await db.deployments.find_one({"contract_address": contract_address}, {"_id": 0})
     
-    if not wallet:
-        raise HTTPException(status_code=404, detail="Wallet not found")
+    if not deployment:
+        raise HTTPException(status_code=404, detail="Deployment not found")
     
-    if isinstance(wallet['created_at'], str):
-        wallet['created_at'] = datetime.fromisoformat(wallet['created_at'])
+    if isinstance(deployment['created_at'], str):
+        deployment['created_at'] = datetime.fromisoformat(deployment['created_at'])
     
-    return wallet
+    return deployment
 
 
 # Transaction Routes
-@api_router.post("/transactions", response_model=Transaction)
-async def create_transaction(input: TransactionCreate):
-    # Validate addresses
-    from_wallet = await db.wallets.find_one({"address": input.from_address})
-    to_wallet = await db.wallets.find_one({"address": input.to_address})
-    
-    if not from_wallet:
-        raise HTTPException(status_code=404, detail="Sender wallet not found")
-    if not to_wallet:
-        raise HTTPException(status_code=404, detail="Recipient wallet not found")
-    
-    # Check balance
-    if from_wallet['balance'] < input.amount:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
-    
-    if input.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    
-    # Create transaction
-    transaction_obj = Transaction(
+@api_router.post("/transactions", response_model=TokenTransaction)
+async def save_transaction(input: TokenTransactionCreate):
+    transaction_obj = TokenTransaction(
+        tx_hash=input.tx_hash,
         from_address=input.from_address,
         to_address=input.to_address,
-        amount=input.amount
+        amount=input.amount,
+        tx_type=input.tx_type,
+        contract_address=input.contract_address
     )
     
-    # Update balances
-    await db.wallets.update_one(
-        {"address": input.from_address},
-        {"$inc": {"balance": -input.amount}}
-    )
-    await db.wallets.update_one(
-        {"address": input.to_address},
-        {"$inc": {"balance": input.amount}}
-    )
-    
-    # Store transaction
     doc = transaction_obj.model_dump()
     doc['timestamp'] = doc['timestamp'].isoformat()
-    await db.transactions.insert_one(doc)
     
+    await db.transactions.insert_one(doc)
     return transaction_obj
 
-@api_router.get("/transactions", response_model=List[Transaction])
+@api_router.get("/transactions", response_model=List[TokenTransaction])
 async def get_transactions():
     transactions = await db.transactions.find({}, {"_id": 0}).sort("timestamp", -1).to_list(1000)
     
-    # Convert ISO string timestamps back to datetime objects
     for tx in transactions:
         if isinstance(tx['timestamp'], str):
             tx['timestamp'] = datetime.fromisoformat(tx['timestamp'])
     
     return transactions
 
-
-# Dashboard Routes
-@api_router.get("/dashboard/stats", response_model=DashboardStats)
-async def get_dashboard_stats():
-    # Get total wallets
-    total_wallets = await db.wallets.count_documents({})
+@api_router.get("/transactions/contract/{contract_address}", response_model=List[TokenTransaction])
+async def get_transactions_by_contract(contract_address: str):
+    transactions = await db.transactions.find(
+        {"contract_address": contract_address}, 
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(1000)
     
-    # Get total tokens in circulation
-    wallets = await db.wallets.find({}, {"_id": 0, "balance": 1}).to_list(1000)
-    total_tokens = sum(w['balance'] for w in wallets)
-    
-    # Get total transactions
-    total_transactions = await db.transactions.count_documents({})
-    
-    # Get recent transactions (last 5)
-    recent_txs = await db.transactions.find({}, {"_id": 0}).sort("timestamp", -1).limit(5).to_list(5)
-    
-    # Convert timestamps
-    for tx in recent_txs:
+    for tx in transactions:
         if isinstance(tx['timestamp'], str):
             tx['timestamp'] = datetime.fromisoformat(tx['timestamp'])
     
-    return DashboardStats(
-        total_tokens=total_tokens,
-        total_wallets=total_wallets,
-        total_transactions=total_transactions,
-        recent_transactions=recent_txs
-    )
+    return transactions
 
 
 # Include the router in the main app
