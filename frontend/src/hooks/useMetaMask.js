@@ -75,20 +75,22 @@ export const useMetaMask = () => {
   }, []);
 
   useEffect(() => {
-    // Check if MetaMask is available
-    const checkMetaMask = async () => {
+    const initMetaMask = async () => {
       if (typeof window.ethereum !== 'undefined') {
         console.log('MetaMask detected');
+        
         try {
+          // Check for existing connection
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           if (accounts.length > 0) {
-            await handleAccountsChanged(accounts);
+            console.log('Found existing connection');
+            await setupProvider(accounts);
           }
         } catch (error) {
           console.error('Error checking accounts:', error);
         }
 
-        // Listen for account changes
+        // Set up event listeners
         window.ethereum.on('accountsChanged', handleAccountsChanged);
         window.ethereum.on('chainChanged', handleChainChanged);
       } else {
@@ -96,7 +98,7 @@ export const useMetaMask = () => {
       }
     };
 
-    checkMetaMask();
+    initMetaMask();
 
     return () => {
       if (window.ethereum) {
@@ -104,7 +106,7 @@ export const useMetaMask = () => {
         window.ethereum.removeListener('chainChanged', handleChainChanged);
       }
     };
-  }, [handleAccountsChanged, handleChainChanged]);
+  }, [handleAccountsChanged, handleChainChanged, setupProvider]);
 
   const connectWallet = async () => {
     if (typeof window.ethereum === 'undefined') {
