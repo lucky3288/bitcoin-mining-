@@ -76,25 +76,31 @@ export const useMetaMask = () => {
 
   useEffect(() => {
     const initMetaMask = async () => {
+      // Vérifie si MetaMask est disponible
       if (typeof window.ethereum !== 'undefined') {
-        console.log('MetaMask detected');
+        console.log('✅ MetaMask est installé !');
         
         try {
-          // Check for existing connection
+          // Tente de récupérer les comptes déjà connectés
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          
           if (accounts.length > 0) {
-            console.log('Found existing connection');
+            console.log('🔗 Connexion existante trouvée');
+            console.log('Compte connecté :', accounts[0]);
             await setupProvider(accounts);
+          } else {
+            console.log('⚠️ Aucune connexion existante. Cliquez sur "Connect MetaMask"');
           }
         } catch (error) {
-          console.error('Error checking accounts:', error);
+          console.error('❌ Erreur lors de la vérification des comptes:', error);
         }
 
         // Set up event listeners
         window.ethereum.on('accountsChanged', handleAccountsChanged);
         window.ethereum.on('chainChanged', handleChainChanged);
       } else {
-        console.log('MetaMask not detected');
+        console.log('❌ MetaMask n\'est pas installé');
+        console.log('📥 Installez MetaMask depuis : https://metamask.io/download.html');
       }
     };
 
