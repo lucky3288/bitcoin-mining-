@@ -11,6 +11,7 @@ export const useMetaMask = () => {
 
   const setupProvider = useCallback(async (accounts) => {
     if (!accounts || accounts.length === 0) {
+      console.log('⚠️ Aucun compte fourni, déconnexion...');
       setAccount(null);
       setProvider(null);
       setSigner(null);
@@ -19,28 +20,34 @@ export const useMetaMask = () => {
     }
 
     try {
+      console.log('🔧 Configuration du provider...');
       setAccount(accounts[0]);
+      console.log('📍 Compte sélectionné:', accounts[0]);
       
       // Create provider
       const web3Provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
       setProvider(web3Provider);
       setSigner(web3Provider.getSigner());
+      console.log('✅ Provider et Signer créés');
       
       // Get network with retry
       let network;
       let retries = 3;
+      console.log('🌐 Détection du réseau...');
+      
       while (retries > 0) {
         try {
           network = await web3Provider.getNetwork();
+          console.log('✅ Réseau détecté:', network.name, '(ChainId:', network.chainId + ')');
           break;
         } catch (err) {
           retries--;
+          console.warn(`⚠️ Tentative échouée, ${retries} restantes...`);
           if (retries === 0) throw err;
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
       
-      console.log('Network:', network.chainId, network.name);
       setChainId(network.chainId);
       
       // Double check with eth_chainId
@@ -48,16 +55,17 @@ export const useMetaMask = () => {
         const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
         const chainIdDec = parseInt(chainIdHex, 16);
         if (chainIdDec !== network.chainId) {
-          console.warn('ChainId mismatch, using:', chainIdDec);
+          console.warn('⚠️ Différence de ChainId détectée, utilisation de:', chainIdDec);
           setChainId(chainIdDec);
         }
       } catch (err) {
-        console.warn('Could not verify chainId:', err);
+        console.warn('⚠️ Impossible de vérifier le chainId:', err.message);
       }
       
+      console.log('✅ Configuration terminée avec succès !');
       setError(null);
     } catch (error) {
-      console.error('Error setting up provider:', error);
+      console.error('❌ Erreur lors de la configuration du provider:', error);
       setError(error.message);
     }
   }, []);
