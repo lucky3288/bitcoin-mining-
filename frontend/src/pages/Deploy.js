@@ -22,18 +22,30 @@ const Deploy = () => {
   const [maxSupply] = useState("500000000"); // 500M
 
   const deployToken = async () => {
+    console.log('Deploy button clicked');
+    console.log('Account:', account);
+    console.log('ChainId:', chainId);
+    console.log('Signer:', signer);
+    
     if (!account) {
       toast.error("Veuillez connecter MetaMask");
       return;
     }
 
+    if (!chainId) {
+      toast.error("Réseau non détecté. Veuillez sélectionner un réseau dans MetaMask.");
+      return;
+    }
+
     if (!signer) {
-      toast.error("Impossible d'obtenir le signer");
+      toast.error("Impossible d'obtenir le signer. Reconnectez MetaMask.");
       return;
     }
 
     setDeploying(true);
     try {
+      console.log('Fetching contract ABI and bytecode...');
+      
       // Récupérer ABI et Bytecode
       const abiResponse = await axios.get(`${API}/contract/abi`);
       const bytecodeResponse = await axios.get(`${API}/contract/bytecode`);
@@ -41,12 +53,16 @@ const Deploy = () => {
       const abi = abiResponse.data.abi;
       const bytecode = bytecodeResponse.data.bytecode;
 
+      console.log('ABI and bytecode loaded');
       toast.info("Préparation du contrat...");
 
       // Créer la factory du contrat
       const factory = new ethers.ContractFactory(abi, bytecode, signer);
 
-      toast.info("Déploiement en cours... Confirmez la transaction dans MetaMask");
+      console.log('Factory created, deploying contract...');
+      toast.info("Déploiement en cours... Confirmez la transaction dans MetaMask", {
+        duration: 10000
+      });
 
       // Déployer le contrat
       const contract = await factory.deploy(
