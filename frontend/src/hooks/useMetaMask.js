@@ -6,40 +6,60 @@ export const useMetaMask = () => {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [chainId, setChainId] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false);
 
-  const handleAccountsChanged = useCallback((accounts) => {
+  const handleAccountsChanged = useCallback(async (accounts) => {
+    console.log('Accounts changed:', accounts);
     if (accounts.length === 0) {
       setAccount(null);
       setProvider(null);
       setSigner(null);
+      setChainId(null);
     } else {
-      setAccount(accounts[0]);
-      const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-      setProvider(web3Provider);
-      setSigner(web3Provider.getSigner());
-      web3Provider.getNetwork().then(network => setChainId(network.chainId));
+      try {
+        setAccount(accounts[0]);
+        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+        setProvider(web3Provider);
+        setSigner(web3Provider.getSigner());
+        const network = await web3Provider.getNetwork();
+        setChainId(network.chainId);
+        console.log('Connected to network:', network.chainId);
+      } catch (error) {
+        console.error('Error in handleAccountsChanged:', error);
+      }
     }
   }, []);
 
-  const handleChainChanged = useCallback(() => {
-    window.location.reload();
+  const handleChainChanged = useCallback((chainId) => {
+    console.log('Chain changed to:', chainId);
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   }, []);
 
   useEffect(() => {
-    // Check if already connected
-    if (window.ethereum) {
-      window.ethereum.request({ method: 'eth_accounts' })
-        .then(accounts => {
+    // Check if MetaMask is available
+    const checkMetaMask = async () => {
+      if (typeof window.ethereum !== 'undefined') {
+        console.log('MetaMask detected');
+        try {
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           if (accounts.length > 0) {
-            handleAccountsChanged(accounts);
+            await handleAccountsChanged(accounts);
           }
-        })
-        .catch(console.error);
+        } catch (error) {
+          console.error('Error checking accounts:', error);
+        }
 
-      // Listen for account changes
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', handleChainChanged);
-    }
+        // Listen for account changes
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', handleChainChanged);
+      } else {
+        console.log('MetaMask not detected');
+      }
+    };
+
+    checkMetaMask();
 
     return () => {
       if (window.ethereum) {
