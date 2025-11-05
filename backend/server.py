@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
-from blockchain_contract import CONTRACT_ABI
+from blockchain_contract import CONTRACT_ABI, CONTRACT_BYTECODE
 
 
 ROOT_DIR = Path(__file__).parent
@@ -38,7 +38,8 @@ class TokenDeployment(BaseModel):
     initial_supply: str
     max_supply: str
     deployer_address: str
-    network: str = "localhost"
+    network: str = "mainnet"
+    chain_id: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class TokenDeploymentCreate(BaseModel):
@@ -48,6 +49,8 @@ class TokenDeploymentCreate(BaseModel):
     initial_supply: str
     max_supply: str
     deployer_address: str
+    network: str = "mainnet"
+    chain_id: int
 
 class TokenTransaction(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -71,10 +74,14 @@ class TokenTransactionCreate(BaseModel):
     contract_address: str
 
 
-# Contract ABI endpoint
+# Contract ABI and Bytecode endpoints
 @api_router.get("/contract/abi")
 async def get_contract_abi():
     return {"abi": CONTRACT_ABI}
+
+@api_router.get("/contract/bytecode")
+async def get_contract_bytecode():
+    return {"bytecode": CONTRACT_BYTECODE}
 
 
 # Token Deployment Routes
@@ -86,7 +93,9 @@ async def save_deployment(input: TokenDeploymentCreate):
         token_symbol=input.token_symbol,
         initial_supply=input.initial_supply,
         max_supply=input.max_supply,
-        deployer_address=input.deployer_address
+        deployer_address=input.deployer_address,
+        network=input.network,
+        chain_id=input.chain_id
     )
     
     doc = deployment_obj.model_dump()
@@ -105,12 +114,12 @@ async def get_deployments():
     
     return deployments
 
-@api_router.get("/deployments/{contract_address}", response_model=TokenDeployment)
-async def get_deployment(contract_address: str):
-    deployment = await db.deployments.find_one({"contract_address": contract_address}, {"_id": 0})
+@api_router.get("/deployments/latest", response_model=TokenDeployment)
+async def get_latest_deployment():
+    deployment = await db.deployments.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
     
     if not deployment:
-        raise HTTPException(status_code=404, detail="Deployment not found")
+        raise HTTPException(status_code=404, detail="No deployments found")
     
     if isinstance(deployment['created_at'], str):
         deployment['created_at'] = datetime.fromisoformat(deployment['created_at'])
@@ -139,19 +148,6 @@ async def save_transaction(input: TokenTransactionCreate):
 @api_router.get("/transactions", response_model=List[TokenTransaction])
 async def get_transactions():
     transactions = await db.transactions.find({}, {"_id": 0}).sort("timestamp", -1).to_list(1000)
-    
-    for tx in transactions:
-        if isinstance(tx['timestamp'], str):
-            tx['timestamp'] = datetime.fromisoformat(tx['timestamp'])
-    
-    return transactions
-
-@api_router.get("/transactions/contract/{contract_address}", response_model=List[TokenTransaction])
-async def get_transactions_by_contract(contract_address: str):
-    transactions = await db.transactions.find(
-        {"contract_address": contract_address}, 
-        {"_id": 0}
-    ).sort("timestamp", -1).to_list(1000)
     
     for tx in transactions:
         if isinstance(tx['timestamp'], str):
