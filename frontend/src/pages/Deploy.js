@@ -24,47 +24,151 @@ const Deploy = () => {
   const [maxSupply] = useState("500000000"); // 500M
 
   const deployToken = async () => {
-    console.log('Deploy button clicked');
+    console.log('=== DEPLOY STARTED ===');
     console.log('Account:', account);
     console.log('ChainId:', chainId);
-    console.log('Signer:', signer);
+    console.log('Signer:', signer ? 'Available' : 'Not available');
     
+    // Validations
     if (!account) {
-      toast.error("Veuillez connecter MetaMask");
+      toast.error("❌ Veuillez connecter MetaMask d'abord");
       return;
     }
 
     if (!chainId) {
-      toast.error("Réseau non détecté. Veuillez sélectionner un réseau dans MetaMask.");
+      toast.error("❌ Réseau non détecté. Sélectionnez un réseau dans MetaMask puis reconnectez.");
       return;
     }
 
     if (!signer) {
-      toast.error("Impossible d'obtenir le signer. Reconnectez MetaMask.");
+      toast.error("❌ Signer non disponible. Reconnectez votre wallet.");
       return;
     }
 
     setDeploying(true);
+    setDeploymentStep("Chargement du contrat...");
+    
     try {
-      console.log('Fetching contract ABI and bytecode...');
+      console.log('Fetching contract data...');
+      toast.info("📄 Chargement du contrat...");
       
-      // Récupérer ABI et Bytecode
-      const abiResponse = await axios.get(`${API}/contract/abi`);
-      const bytecodeResponse = await axios.get(`${API}/contract/bytecode`);
+      // Récupérer ABI et Bytecode avec timeout
+      const fetchWithTimeout = (url, timeout = 10000) => {
+        return Promise.race([
+          axios.get(url),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), timeout)
+          )
+        ]);
+      };
+      
+      const [abiResponse, bytecodeResponse] = await Promise.all([
+        fetchWithTimeout(`${API}/contract/abi`),
+        fetchWithTimeout(`${API}/contract/bytecode`)
+      ]);
       
       const abi = abiResponse.data.abi;
       const bytecode = bytecodeResponse.data.bytecode;
 
-      console.log('ABI and bytecode loaded');
-      toast.info("Préparation du contrat...");
+      console.log('Contract data loaded');
+      setDeploymentStep("Création du contrat...");
+      toast.info("🔨 Préparation du déploiement...");
 
       // Créer la factory du contrat
       const factory = new ethers.ContractFactory(abi, bytecode, signer);
 
-      console.log('Factory created, deploying contract...');
-      toast.info("Déploiement en cours... Confirmez la transaction dans MetaMask", {
+      console.log('Deploying contract...');
+      setDeploymentStep("⚠️ Confirmez la transaction dans MetaMask...");
+      toast.warning("🦊 OUVREZ METAMASK et confirmez la transaction !", {
+        duration: 15000,
+        important: true
+      });
+
+      // Déployer le contrat avec gas estimation
+      let gasLimit;
+      try {
+        const gasEstimate = await factory.signer.estimateGas(
+          factory.getDeployTransaction(tokenName, tokenSymbol, initialSupply, maxSupply)
+        );
+        gasLimit = gasEstimate.mul(120).div(100); // Add 20% buffer
+        console.log('Gas estimate:', gasEstimate.toString());
+      } catch (err) {
+        console.warn('Could not estimate gas, using default');
+        gasLimit = 3000000;
+      }
+
+      const contract = await factory.deploy(
+        tokenName,
+        tokenSymbol,
+        initialSupply,
+        maxSupply,
+        { gasLimit }
+      );
+
+      console.log('Transaction sent:', contract.deployTransaction.hash);
+      setTxHash(contract.deployTransaction.hash);
+      setDeploymentStep("⏳ Transaction envoyée, attente de confirmation...");
+      
+      toast.info("✅ Transaction envoyée ! Hash: " + contract.deployTransaction.hash.substring(0, 10) + "...", {
+        duration: 5000
+      });
+      
+      toast.info("⏳ Attente de la confirmation blockchain (2-5 min)...", {
         duration: 10000
       });
+
+      // Attendre la confirmation
+      const receipt = await contract.deployTransaction.wait();
+      console.log('Transaction confirmed:', receipt);
+
+      const address = contract.address;
+      setContractAddress(address);
+      setDeployed(true);
+      setDeploymentStep("✅ Déploiement réussi !");
+
+      // Sauvegarder dans la base de données
+      try {
+        await axios.post(`${API}/deployments`, {
+          contract_address: address,
+          token_name: tokenName,
+          token_symbol: tokenSymbol,
+          initial_supply: initialSupply,
+          max_supply: maxSupply,
+          deployer_address: account,
+          network: chainId === 1 ? "mainnet" : chainId === 5 ? "goerli" : chainId === 11155111 ? "sepolia" : chainId === 137 ? "polygon" : "other",
+          chain_id: chainId
+        });
+      } catch (dbError) {
+        console.warn('Could not save to database:', dbError);
+      }
+
+      toast.success(`🎉 Token ${tokenName} déployé avec succès !`, {
+        duration: 10000
+      });
+      
+    } catch (error) {
+      console.error('=== DEPLOYMENT ERROR ===');
+      console.error('Error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      setDeploymentStep("");
+      
+      if (error.code === 4001) {
+        toast.error("❌ Transaction rejetée par l'utilisateur");
+      } else if (error.code === -32002) {
+        toast.error("⚠️ Une demande est déjà en attente dans MetaMask. Ouvrez MetaMask et confirmez.");
+      } else if (error.message && error.message.includes("insufficient funds")) {
+        toast.error("❌ Solde insuffisant pour les frais de déploiement");
+      } else if (error.message && error.message.includes("Timeout")) {
+        toast.error("❌ Timeout - Vérifiez votre connexion internet");
+      } else {
+        toast.error("❌ Erreur: " + (error.reason || error.message || "Erreur inconnue"));
+      }
+    } finally {
+      setDeploying(false);
+    }
+  };
 
       // Déployer le contrat
       const contract = await factory.deploy(
