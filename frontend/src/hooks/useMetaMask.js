@@ -108,45 +108,42 @@ export const useMetaMask = () => {
 
   const connectWallet = async () => {
     if (typeof window.ethereum === 'undefined') {
-      alert('MetaMask n\'est pas installé! Veuillez installer MetaMask pour continuer.');
-      window.open('https://metamask.io/download.html', '_blank');
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile) {
+        // Redirect to MetaMask mobile app
+        const dappUrl = window.location.href.replace(/^https?:\/\//, '');
+        window.location.href = `https://metamask.app.link/dapp/${dappUrl}`;
+      } else {
+        alert('MetaMask n\'est pas installé! Veuillez installer MetaMask pour continuer.');
+        window.open('https://metamask.io/download.html', '_blank');
+      }
       return;
     }
 
     setIsConnecting(true);
+    setError(null);
+    
     try {
       console.log('Requesting accounts...');
+      
       const accounts = await window.ethereum.request({ 
         method: 'eth_requestAccounts' 
       });
+      
       console.log('Accounts received:', accounts);
       
       if (accounts && accounts.length > 0) {
-        setAccount(accounts[0]);
-        
-        // Create provider and get network
-        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-        setProvider(web3Provider);
-        setSigner(web3Provider.getSigner());
-        
-        // Get network info
-        const network = await web3Provider.getNetwork();
-        console.log('Network detected:', network.chainId, network.name);
-        setChainId(network.chainId);
-        
-        // Also get it directly from ethereum
-        const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-        const chainIdDec = parseInt(chainIdHex, 16);
-        console.log('ChainId from ethereum:', chainIdDec);
-        
-        if (!chainId || chainId !== chainIdDec) {
-          setChainId(chainIdDec);
-        }
+        await setupProvider(accounts);
+        console.log('Wallet connected successfully');
       }
     } catch (error) {
       console.error('Error connecting wallet:', error);
+      setError(error.message);
+      
       if (error.code === 4001) {
         alert('Connexion refusée. Veuillez accepter la connexion dans MetaMask.');
+      } else if (error.code === -32002) {
+        alert('Une demande de connexion est déjà en attente dans MetaMask. Veuillez ouvrir MetaMask et accepter.');
       } else {
         alert('Erreur de connexion: ' + error.message);
       }
