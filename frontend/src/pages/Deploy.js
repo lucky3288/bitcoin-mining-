@@ -170,50 +170,6 @@ const Deploy = () => {
     }
   };
 
-      // Déployer le contrat
-      const contract = await factory.deploy(
-        tokenName,
-        tokenSymbol,
-        initialSupply,
-        maxSupply
-      );
-
-      toast.info("Attente de confirmation de la transaction...");
-
-      // Attendre que le contrat soit déployé
-      await contract.deployTransaction.wait();
-
-      const address = contract.address;
-      setContractAddress(address);
-      setDeployed(true);
-
-      // Sauvegarder dans la base de données
-      await axios.post(`${API}/deployments`, {
-        contract_address: address,
-        token_name: tokenName,
-        token_symbol: tokenSymbol,
-        initial_supply: initialSupply,
-        max_supply: maxSupply,
-        deployer_address: account,
-        network: chainId === 1 ? "mainnet" : chainId === 5 ? "goerli" : chainId === 11155111 ? "sepolia" : "other",
-        chain_id: chainId
-      });
-
-      toast.success(`Token ${tokenName} déployé avec succès !`);
-    } catch (error) {
-      console.error("Erreur de déploiement:", error);
-      if (error.code === 4001) {
-        toast.error("Transaction rejetée par l'utilisateur");
-      } else if (error.message.includes("insufficient funds")) {
-        toast.error("Solde insuffisant pour déployer le contrat");
-      } else {
-        toast.error("Erreur lors du déploiement: " + error.message);
-      }
-    } finally {
-      setDeploying(false);
-    }
-  };
-
   return (
     <div data-testid="deploy-page" className="deploy-container">
       <div className="page-header">
