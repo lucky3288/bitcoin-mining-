@@ -7,6 +7,7 @@ export const useMetaMask = () => {
   const [signer, setSigner] = useState(null);
   const [chainId, setChainId] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleAccountsChanged = useCallback(async (accounts) => {
     console.log('Accounts changed:', accounts);
