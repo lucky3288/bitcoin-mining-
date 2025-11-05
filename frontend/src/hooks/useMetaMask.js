@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 
 export const useMetaMask = () => {
@@ -6,6 +6,24 @@ export const useMetaMask = () => {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [chainId, setChainId] = useState(null);
+
+  const handleAccountsChanged = useCallback((accounts) => {
+    if (accounts.length === 0) {
+      setAccount(null);
+      setProvider(null);
+      setSigner(null);
+    } else {
+      setAccount(accounts[0]);
+      const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+      setProvider(web3Provider);
+      setSigner(web3Provider.getSigner());
+      web3Provider.getNetwork().then(network => setChainId(network.chainId));
+    }
+  }, []);
+
+  const handleChainChanged = useCallback(() => {
+    window.location.reload();
+  }, []);
 
   useEffect(() => {
     // Check if already connected
@@ -15,7 +33,8 @@ export const useMetaMask = () => {
           if (accounts.length > 0) {
             handleAccountsChanged(accounts);
           }
-        });
+        })
+        .catch(console.error);
 
       // Listen for account changes
       window.ethereum.on('accountsChanged', handleAccountsChanged);
@@ -28,25 +47,7 @@ export const useMetaMask = () => {
         window.ethereum.removeListener('chainChanged', handleChainChanged);
       }
     };
-  }, []);
-
-  const handleAccountsChanged = (accounts) => {
-    if (accounts.length === 0) {
-      setAccount(null);
-      setProvider(null);
-      setSigner(null);
-    } else if (accounts[0] !== account) {
-      setAccount(accounts[0]);
-      const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-      setProvider(web3Provider);
-      setSigner(web3Provider.getSigner());
-      web3Provider.getNetwork().then(network => setChainId(network.chainId));
-    }
-  };
-
-  const handleChainChanged = (chainId) => {
-    window.location.reload();
-  };
+  }, [handleAccountsChanged, handleChainChanged]);
 
   const connectWallet = async () => {
     if (!window.ethereum) {
