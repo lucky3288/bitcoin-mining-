@@ -85,13 +85,26 @@ export const useMetaMask = () => {
       console.log('Accounts received:', accounts);
       
       if (accounts && accounts.length > 0) {
-        await handleAccountsChanged(accounts);
+        setAccount(accounts[0]);
         
-        // Force network check
+        // Create provider and get network
         const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+        setProvider(web3Provider);
+        setSigner(web3Provider.getSigner());
+        
+        // Get network info
         const network = await web3Provider.getNetwork();
-        console.log('Connected to network:', network.chainId);
+        console.log('Network detected:', network.chainId, network.name);
         setChainId(network.chainId);
+        
+        // Also get it directly from ethereum
+        const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+        const chainIdDec = parseInt(chainIdHex, 16);
+        console.log('ChainId from ethereum:', chainIdDec);
+        
+        if (!chainId || chainId !== chainIdDec) {
+          setChainId(chainIdDec);
+        }
       }
     } catch (error) {
       console.error('Error connecting wallet:', error);
