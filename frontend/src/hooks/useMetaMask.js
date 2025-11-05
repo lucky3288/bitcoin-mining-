@@ -115,45 +115,53 @@ export const useMetaMask = () => {
   }, [handleAccountsChanged, handleChainChanged, setupProvider]);
 
   const connectWallet = async () => {
+    // Vérifie si MetaMask est disponible
     if (typeof window.ethereum === 'undefined') {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      console.log('❌ MetaMask n\'est pas installé !');
+      
       if (isMobile) {
+        console.log('📱 Redirection vers l\'app MetaMask...');
         // Redirect to MetaMask mobile app
         const dappUrl = window.location.href.replace(/^https?:\/\//, '');
         window.location.href = `https://metamask.app.link/dapp/${dappUrl}`;
       } else {
-        alert('MetaMask n\'est pas installé! Veuillez installer MetaMask pour continuer.');
+        alert('MetaMask n\'est pas installé ! Veuillez installer MetaMask pour continuer.');
         window.open('https://metamask.io/download.html', '_blank');
       }
       return;
     }
 
+    console.log('✅ MetaMask est installé !');
     setIsConnecting(true);
     setError(null);
     
     try {
-      console.log('Requesting accounts...');
+      console.log('🔌 Demande de connexion à MetaMask...');
       
+      // Demande la connexion
       const accounts = await window.ethereum.request({ 
         method: 'eth_requestAccounts' 
       });
       
-      console.log('Accounts received:', accounts);
+      console.log('✅ Comptes reçus:', accounts);
+      console.log('🔗 Connecté avec le compte :', accounts[0]);
       
       if (accounts && accounts.length > 0) {
         await setupProvider(accounts);
-        console.log('Wallet connected successfully');
+        console.log('✅ Wallet connecté avec succès !');
       }
     } catch (error) {
-      console.error('Error connecting wallet:', error);
+      console.error('❌ Erreur de connexion à MetaMask :', error);
       setError(error.message);
       
       if (error.code === 4001) {
-        alert('Connexion refusée. Veuillez accepter la connexion dans MetaMask.');
+        alert('❌ Connexion refusée. Veuillez accepter la connexion dans MetaMask.');
       } else if (error.code === -32002) {
-        alert('Une demande de connexion est déjà en attente dans MetaMask. Veuillez ouvrir MetaMask et accepter.');
+        alert('⚠️ Une demande de connexion est déjà en attente dans MetaMask. Veuillez ouvrir MetaMask et accepter.');
       } else {
-        alert('Erreur de connexion: ' + error.message);
+        alert('❌ Erreur de connexion: ' + error.message);
       }
     } finally {
       setIsConnecting(false);
