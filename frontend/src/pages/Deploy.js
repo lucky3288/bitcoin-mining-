@@ -10,10 +10,12 @@ import { toast } from "sonner";
 import { Loader2, CheckCircle2, Rocket } from "lucide-react";
 
 const Deploy = () => {
-  const { account, signer, chainId } = useMetaMask();
+  const { account, signer, chainId, error: walletError } = useMetaMask();
   const [deploying, setDeploying] = useState(false);
   const [deployed, setDeployed] = useState(false);
   const [contractAddress, setContractAddress] = useState("");
+  const [deploymentStep, setDeploymentStep] = useState("");
+  const [txHash, setTxHash] = useState("");
   
   // Paramètres prédéfinis pour Zyno
   const [tokenName] = useState("Zyno");
