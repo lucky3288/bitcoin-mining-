@@ -25,6 +25,14 @@ const Deploy = () => {
 
   const deployToken = async () => {
     console.log('=== DEPLOY STARTED ===');
+    
+    // Vérifie si MetaMask est disponible
+    if (!window.ethereum) {
+      alert("❌ MetaMask non détecté. Veuillez installer MetaMask.");
+      return;
+    }
+    
+    console.log('✅ MetaMask détecté');
     console.log('Account:', account);
     console.log('ChainId:', chainId);
     console.log('Signer:', signer ? 'Available' : 'Not available');
@@ -49,7 +57,17 @@ const Deploy = () => {
     setDeploymentStep("Chargement du contrat...");
     
     try {
-      console.log('Fetching contract data...');
+      console.log('🔌 Connexion au wallet...');
+      
+      // Connexion au wallet (déjà fait via le hook, mais on re-vérifie)
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      
+      // Provider et Signer (ethers v5 syntax)
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const walletSigner = provider.getSigner();
+      
+      console.log('✅ Provider et Signer obtenus');
+      console.log('📄 Chargement du contrat (bytecode + ABI)...');
       toast.info("📄 Chargement du contrat...");
       
       // Récupérer ABI et Bytecode avec timeout
@@ -67,37 +85,43 @@ const Deploy = () => {
         fetchWithTimeout(`${API}/contract/bytecode`)
       ]);
       
-      const abi = abiResponse.data.abi;
-      const bytecode = bytecodeResponse.data.bytecode;
+      const tokenABI = abiResponse.data.abi;
+      const tokenBytecode = bytecodeResponse.data.bytecode;
 
-      console.log('Contract data loaded');
-      setDeploymentStep("Création du contrat...");
+      console.log('✅ ABI et Bytecode chargés');
+      setDeploymentStep("Création de la factory du contrat...");
       toast.info("🔨 Préparation du déploiement...");
 
-      // Créer la factory du contrat
-      const factory = new ethers.ContractFactory(abi, bytecode, signer);
+      // Contrat compilé (bytecode + ABI) - ethers v5 syntax
+      const tokenFactory = new ethers.ContractFactory(
+        tokenABI,
+        tokenBytecode,
+        walletSigner
+      );
 
-      console.log('Deploying contract...');
+      console.log('✅ Factory créée');
+      console.log('🚀 Déploiement en cours...');
       setDeploymentStep("⚠️ Confirmez la transaction dans MetaMask...");
       toast.warning("🦊 OUVREZ METAMASK et confirmez la transaction !", {
         duration: 15000,
         important: true
       });
 
-      // Déployer le contrat avec gas estimation
+      // Estimation du gas
       let gasLimit;
       try {
-        const gasEstimate = await factory.signer.estimateGas(
-          factory.getDeployTransaction(tokenName, tokenSymbol, initialSupply, maxSupply)
+        const gasEstimate = await walletSigner.estimateGas(
+          tokenFactory.getDeployTransaction(tokenName, tokenSymbol, initialSupply, maxSupply)
         );
         gasLimit = gasEstimate.mul(120).div(100); // Add 20% buffer
-        console.log('Gas estimate:', gasEstimate.toString());
+        console.log('⛽ Gas estimé:', gasEstimate.toString());
       } catch (err) {
-        console.warn('Could not estimate gas, using default');
+        console.warn('⚠️ Impossible d\'estimer le gas, utilisation de la valeur par défaut');
         gasLimit = 3000000;
       }
 
-      const contract = await factory.deploy(
+      // Déploiement du contrat (ethers v5 syntax)
+      const contract = await tokenFactory.deploy(
         tokenName,
         tokenSymbol,
         initialSupply,
@@ -105,7 +129,7 @@ const Deploy = () => {
         { gasLimit }
       );
 
-      console.log('Transaction sent:', contract.deployTransaction.hash);
+      console.log('✅ Transaction envoyée:', contract.deployTransaction.hash);
       setTxHash(contract.deployTransaction.hash);
       setDeploymentStep("⏳ Transaction envoyée, attente de confirmation...");
       
@@ -117,19 +141,22 @@ const Deploy = () => {
         duration: 10000
       });
 
-      // Attendre la confirmation
-      const receipt = await contract.deployTransaction.wait();
-      console.log('Transaction confirmed:', receipt);
-
-      const address = contract.address;
-      setContractAddress(address);
+      // Attendre le déploiement (ethers v5 syntax)
+      await contract.deployTransaction.wait();
+      console.log('✅ Transaction confirmée');
+      
+      // Adresse du contrat déployé (ethers v5 syntax: contract.address, v6: contract.target)
+      const deployedAddress = contract.address;
+      console.log('🎉 Déployé à :', deployedAddress);
+      
+      setContractAddress(deployedAddress);
       setDeployed(true);
       setDeploymentStep("✅ Déploiement réussi !");
 
       // Sauvegarder dans la base de données
       try {
         await axios.post(`${API}/deployments`, {
-          contract_address: address,
+          contract_address: deployedAddress,
           token_name: tokenName,
           token_symbol: tokenSymbol,
           initial_supply: initialSupply,
@@ -138,19 +165,22 @@ const Deploy = () => {
           network: chainId === 1 ? "mainnet" : chainId === 5 ? "goerli" : chainId === 11155111 ? "sepolia" : chainId === 137 ? "polygon" : "other",
           chain_id: chainId
         });
+        console.log('✅ Sauvegardé dans la base de données');
       } catch (dbError) {
-        console.warn('Could not save to database:', dbError);
+        console.warn('⚠️ Impossible de sauvegarder dans la base de données:', dbError);
       }
 
       toast.success(`🎉 Token ${tokenName} déployé avec succès !`, {
         duration: 10000
       });
       
+      alert(`✅ Token déployé à : ${deployedAddress}`);
+      
     } catch (error) {
       console.error('=== DEPLOYMENT ERROR ===');
-      console.error('Error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
+      console.error('❌ Erreur :', error);
+      console.error('Code:', error.code);
+      console.error('Message:', error.message);
       
       setDeploymentStep("");
       
