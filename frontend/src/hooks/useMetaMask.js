@@ -9,27 +9,63 @@ export const useMetaMask = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleAccountsChanged = useCallback(async (accounts) => {
-    console.log('Accounts changed:', accounts);
-    if (accounts.length === 0) {
+  const setupProvider = useCallback(async (accounts) => {
+    if (!accounts || accounts.length === 0) {
       setAccount(null);
       setProvider(null);
       setSigner(null);
       setChainId(null);
-    } else {
-      try {
-        setAccount(accounts[0]);
-        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-        setProvider(web3Provider);
-        setSigner(web3Provider.getSigner());
-        const network = await web3Provider.getNetwork();
-        setChainId(network.chainId);
-        console.log('Connected to network:', network.chainId);
-      } catch (error) {
-        console.error('Error in handleAccountsChanged:', error);
+      return;
+    }
+
+    try {
+      setAccount(accounts[0]);
+      
+      // Create provider
+      const web3Provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+      setProvider(web3Provider);
+      setSigner(web3Provider.getSigner());
+      
+      // Get network with retry
+      let network;
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          network = await web3Provider.getNetwork();
+          break;
+        } catch (err) {
+          retries--;
+          if (retries === 0) throw err;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
+      
+      console.log('Network:', network.chainId, network.name);
+      setChainId(network.chainId);
+      
+      // Double check with eth_chainId
+      try {
+        const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+        const chainIdDec = parseInt(chainIdHex, 16);
+        if (chainIdDec !== network.chainId) {
+          console.warn('ChainId mismatch, using:', chainIdDec);
+          setChainId(chainIdDec);
+        }
+      } catch (err) {
+        console.warn('Could not verify chainId:', err);
+      }
+      
+      setError(null);
+    } catch (error) {
+      console.error('Error setting up provider:', error);
+      setError(error.message);
     }
   }, []);
+
+  const handleAccountsChanged = useCallback(async (accounts) => {
+    console.log('Accounts changed:', accounts);
+    await setupProvider(accounts);
+  }, [setupProvider]);
 
   const handleChainChanged = useCallback((chainId) => {
     console.log('Chain changed to:', chainId);
