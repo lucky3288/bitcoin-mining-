@@ -229,6 +229,23 @@ const Deploy = () => {
                 ⚠️ Veuillez connecter MetaMask pour déployer
               </div>
             )}
+            
+            {walletError && (
+              <div className="deploy-warning">
+                ⚠️ Erreur wallet: {walletError}
+              </div>
+            )}
+            
+            {deploymentStep && (
+              <div className="deploy-info" style={{ marginBottom: '1rem', background: 'rgba(59, 130, 246, 0.1)' }}>
+                <p style={{ margin: 0, color: '#3b82f6' }}>{deploymentStep}</p>
+                {txHash && (
+                  <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem' }}>
+                    TX: {txHash.substring(0, 20)}...
+                  </p>
+                )}
+              </div>
+            )}
 
             <Button
               onClick={deployToken}
