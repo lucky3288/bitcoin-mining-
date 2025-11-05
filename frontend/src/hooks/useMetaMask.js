@@ -129,6 +129,7 @@ export const useMetaMask = () => {
     provider,
     signer,
     chainId,
+    isConnecting,
     connectWallet,
     disconnectWallet,
     switchNetwork
