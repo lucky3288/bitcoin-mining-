@@ -14,7 +14,7 @@ export const API = `${BACKEND_URL}/api`;
 
 const Navigation = () => {
   const location = useLocation();
-  const { account, connectWallet, disconnectWallet } = useMetaMask();
+  const { account, connectWallet, disconnectWallet, chainId } = useMetaMask();
   
   const isActive = (path) => {
     return location.pathname === path;
@@ -22,6 +22,18 @@ const Navigation = () => {
   
   const formatAddress = (addr) => {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+  };
+
+  const getNetworkName = (id) => {
+    const networks = {
+      1: "Ethereum",
+      5: "Goerli",
+      11155111: "Sepolia",
+      56: "BSC",
+      137: "Polygon",
+      1337: "Localhost"
+    };
+    return networks[id] || `Chain ${id}`;
   };
   
   return (
@@ -61,9 +73,12 @@ const Navigation = () => {
           </Link>
         </div>
 
-        <div>
+        <div className="wallet-section">
           {account ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div className="network-badge" data-testid="network-badge">
+                {getNetworkName(chainId)}
+              </div>
               <div className="wallet-badge" data-testid="wallet-address">
                 {formatAddress(account)}
               </div>
@@ -72,6 +87,7 @@ const Navigation = () => {
                 data-testid="disconnect-button"
                 variant="outline"
                 size="sm"
+                className="disconnect-btn"
               >
                 Disconnect
               </Button>
@@ -82,7 +98,7 @@ const Navigation = () => {
               data-testid="connect-wallet-button"
               className="connect-button"
             >
-              Connect MetaMask
+              🦊 Connect MetaMask
             </Button>
           )}
         </div>
