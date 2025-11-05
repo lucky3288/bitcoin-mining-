@@ -70,19 +70,38 @@ export const useMetaMask = () => {
   }, [handleAccountsChanged, handleChainChanged]);
 
   const connectWallet = async () => {
-    if (!window.ethereum) {
+    if (typeof window.ethereum === 'undefined') {
       alert('MetaMask n\'est pas installé! Veuillez installer MetaMask pour continuer.');
       window.open('https://metamask.io/download.html', '_blank');
       return;
     }
 
+    setIsConnecting(true);
     try {
+      console.log('Requesting accounts...');
       const accounts = await window.ethereum.request({ 
         method: 'eth_requestAccounts' 
       });
-      handleAccountsChanged(accounts);
+      console.log('Accounts received:', accounts);
+      
+      if (accounts && accounts.length > 0) {
+        await handleAccountsChanged(accounts);
+        
+        // Force network check
+        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+        const network = await web3Provider.getNetwork();
+        console.log('Connected to network:', network.chainId);
+        setChainId(network.chainId);
+      }
     } catch (error) {
-      console.error('Erreur de connexion:', error);
+      console.error('Error connecting wallet:', error);
+      if (error.code === 4001) {
+        alert('Connexion refusée. Veuillez accepter la connexion dans MetaMask.');
+      } else {
+        alert('Erreur de connexion: ' + error.message);
+      }
+    } finally {
+      setIsConnecting(false);
     }
   };
 
